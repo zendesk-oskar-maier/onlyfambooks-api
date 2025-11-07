@@ -1,0 +1,43 @@
+[project]
+name = "onlyfambooks-api"
+version = "0.1.0"
+description = "Onfly Fam Book Catalogue"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "pydantic>=2.0.0",
+    "thefuzz>=0.19.0",
+    "fastapi>=0.104.0",
+    "uvicorn>=0.24.0",
+]
+
+[dependency-groups]
+dev = ["pytest>=7.0.0", "httpx>=0.25.0", "pre-commit>=3.0.0", "ruff>=0.7.0"]
+
+[tool.ruff]
+# Set the maximum line length to 88.
+line-length = 88
+
+# Assume Python 3.13
+target-version = "py313"
+
+[tool.ruff.lint]
+# Enable pycodestyle (`E`) and Pyflakes (`F`) codes by default.
+# Additionally enable flake8-bugbear (`B`) rules.
+select = ["E", "F", "B"]
+
+# Allow fix for all enabled rules (when `--fix`) is provided.
+fixable = ["ALL"]
+
+[tool.ruff.format]
+# Like Black, use double quotes for strings.
+quote-style = "double"
+
+# Like Black, indent with spaces, rather than tabs.
+indent-style = "space"
+
+# Like Black, respect magic trailing commas.
+skip-magic-trailing-comma = false
+
+# Like Black, automatically detect the appropriate line ending.
+line-ending = "auto"
