@@ -87,6 +87,18 @@ class ErrorResponse(BaseModel):
 
 
 # Exception handlers
+@app.exception_handler(HTTPException)
+async def http_exception_handler(request, exc):
+    """Custom HTTPException handler to include error_code in response body"""
+    content = {"detail": exc.detail}
+    if exc.headers and "error_code" in exc.headers:
+        content["error_code"] = exc.headers["error_code"]
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=content,
+    )
+
+
 @app.exception_handler(404)
 async def not_found_handler(request, exc):
     return JSONResponse(
@@ -132,6 +144,20 @@ def validate_limit(limit: int) -> int:
     return limit
 
 
+def validate_genre(genre: str, catalogue: Catalogue) -> str:
+    """Validate genre parameter against available genres"""
+    available_genres = catalogue.get_all_genres()
+    # Case-insensitive genre validation
+    if not any(g.lower() == genre.lower() for g in available_genres):
+        genre_list = ", ".join(available_genres)
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unknown genre: '{genre}'. Available genres: {genre_list}",
+            headers={"error_code": "INVALID_GENRE"},
+        )
+    return genre
+
+
 # API Routes
 
 
@@ -169,7 +195,7 @@ async def health_check():
 async def get_books(
     limit: Annotated[
         int, Query(description="Maximum number of books to return", ge=1, le=1000)
-    ] = 50,
+    ] = 10,
     genre: Annotated[str | None, Query(description="Filter books by genre")] = None,
     title: Annotated[
         str | None, Query(description="Search books by title (fuzzy matching)")
@@ -201,6 +227,10 @@ async def get_books(
     try:
         limit = validate_limit(limit)
 
+        # Validate genre if provided
+        if genre:
+            genre = validate_genre(genre, catalogue)
+
         # Apply filters based on query parameters
         if title and genre:
             # Both title and genre filters
@@ -228,6 +258,8 @@ async def get_books(
 
         return BooksListResponse(books=book_responses, total=total_books, limit=limit)
 
+    except HTTPException:
+        raise
     except Exception as e:
         logger.error(f"Error in get_books: {e}")
         raise HTTPException(

@@ -3,9 +3,11 @@ import tempfile
 from pathlib import Path
 
 import pytest
+from fastapi import HTTPException
 from fastapi.testclient import TestClient
 
-from api import app
+from api import app, validate_genre
+from catalogue import Catalogue
 
 
 @pytest.fixture
@@ -88,7 +90,7 @@ def test_get_all_books(client):
     data = response.json()
     assert len(data["books"]) == 3
     assert data["total"] == 3
-    assert data["limit"] == 50
+    assert data["limit"] == 10  # Updated to match current API default
 
 
 def test_get_book_by_id(client):
@@ -173,3 +175,101 @@ def test_invalid_limit(client):
     """Test invalid limit parameter"""
     response = client.get("/api/v1/books?limit=0")
     assert response.status_code == 422  # Validation error from Pydantic
+
+
+def test_invalid_genre(client):
+    """Test invalid genre returns 400 error"""
+    response = client.get("/api/v1/books?genre=InvalidGenre")
+    assert response.status_code == 400
+    data = response.json()
+    assert "Unknown genre" in data["detail"]
+    assert "InvalidGenre" in data["detail"]
+    assert "Available genres" in data["detail"]
+    assert data.get("error_code") == "INVALID_GENRE"
+
+
+def test_case_insensitive_genre(client):
+    """Test genre validation is case-insensitive"""
+    # Test lowercase
+    response = client.get("/api/v1/books?genre=fantasy")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["books"]) == 2
+
+    # Test uppercase
+    response = client.get("/api/v1/books?genre=FANTASY")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["books"]) == 2
+
+    # Test mixed case
+    response = client.get("/api/v1/books?genre=FaNtAsY")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["books"]) == 2
+
+
+def test_genre_validation_with_fuzzy_search(client):
+    """Test that genre validation works with title fuzzy search"""
+    # Valid genre with title search
+    response = client.get("/api/v1/books?genre=Fantasy&title=Harry")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["books"]) == 1
+    assert data["books"][0]["title"] == "Harry Potter and the Philosopher's Stone"
+
+    # Invalid genre with title search should still fail
+    response = client.get("/api/v1/books?genre=InvalidGenre&title=Harry")
+    assert response.status_code == 400
+    data = response.json()
+    assert "Unknown genre" in data["detail"]
+
+
+def test_genre_validation_error_message_format(client):
+    """Test that genre validation error message contains all available genres"""
+    response = client.get("/api/v1/books?genre=NonExistentGenre")
+    assert response.status_code == 400
+    data = response.json()
+
+    # Check that all known genres are listed in the error message
+    expected_genres = [
+        "Fantasy",
+        "Young Adult",
+        "Magic",
+        "Classics",
+        "Fiction",
+        "Historical Fiction",
+        "Adventure",
+    ]
+    for genre in expected_genres:
+        assert genre in data["detail"]
+
+
+# Unit tests for utility functions
+
+
+def test_validate_genre_valid(test_csv_file):
+    """Test validate_genre function with valid genre"""
+    catalogue = Catalogue(test_csv_file)
+
+    # Test valid genre
+    result = validate_genre("Fantasy", catalogue)
+    assert result == "Fantasy"
+
+    # Test case-insensitive validation
+    result = validate_genre("fantasy", catalogue)
+    assert result == "fantasy"
+
+
+def test_validate_genre_invalid(test_csv_file):
+    """Test validate_genre function with invalid genre"""
+    catalogue = Catalogue(test_csv_file)
+
+    with pytest.raises(HTTPException) as exc_info:
+        validate_genre("InvalidGenre", catalogue)
+
+    assert exc_info.value.status_code == 400
+    assert "Unknown genre" in exc_info.value.detail
+    assert "InvalidGenre" in exc_info.value.detail
+    assert "Available genres" in exc_info.value.detail
+    assert exc_info.value.headers["error_code"] == "INVALID_GENRE"
