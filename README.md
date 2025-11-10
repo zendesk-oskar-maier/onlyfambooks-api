@@ -4,11 +4,16 @@ A FastAPI-based REST API that simulates a book catalogue.
 
 ## 🚀 API Endpoints
 
-- `GET /api/v1/books?limit=N` - Get all books with pagination
+- `GET /` - Root endpoint with API information
+- `GET /health` - Health check endpoint
+- `GET /api/v1/books` - Get books with optional filtering and pagination
+  - `GET /api/v1/books?title=harry` - Search books by title
+  - `GET /api/v1/books?genre=fantasy` - Filter books by genre
+  - `GET /api/v1/books?title=harry&genre=fantasy` - Search by both title and genre
 - `GET /api/v1/books/{id}` - Get a specific book by ID
-- `GET /api/v1/books?genre={genre}&limit=N` - Filter books by genre
-- `GET /api/v1/books?title={title}&limit=N` - Search books by title (fuzzy)
-- `GET /api/v1/genres?limit=N` - Get all available genres
+- `GET /api/v1/genres` - Get all available genres
+- `POST /api/v1/genres` - Get all available genres via POST
+- `GET /api/v1/stats` - Get catalogue statistics
 
 ## 🛠️ Quick Start
 
