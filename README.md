@@ -4,11 +4,70 @@ A FastAPI-based REST API that simulates a book catalogue.
 
 ## 🚀 API Endpoints
 
-- `GET /api/v1/books?limit=N` - Get all books with pagination
-- `GET /api/v1/books/{id}` - Get a specific book by ID
-- `GET /api/v1/books?genre={genre}&limit=N` - Filter books by genre
-- `GET /api/v1/books?title={title}&limit=N` - Search books by title (fuzzy)
-- `GET /api/v1/genres?limit=N` - Get all available genres
+All endpoints use POST requests with JSON request bodies:
+
+- `POST /api/v1/books` - Get all books with optional filtering
+  - Request body: `{"limit": 10, "genre": "Fantasy", "title": "Harry Potter", "fuzzy": true, "threshold": 80}`
+- `POST /api/v1/books/by-id` - Get a specific book by ID
+  - Request body: `{"book_id": 1}`
+- `POST /api/v1/genres` - Get all available genres
+  - Request body: `{"limit": 100}`
+- `POST /api/v1/stats` - Get catalogue statistics
+  - Request body: `{}`
+- `POST /health` - Health check endpoint
+  - Request body: `{}`
+
+### Request Parameters
+
+**Books endpoint (`/api/v1/books`)**:
+- `limit` (int, default: 10): Maximum number of books to return (1-1000)
+- `genre` (string, optional): Filter books by genre (exact match)
+- `title` (string, optional): Search books by title (supports fuzzy matching)
+- `fuzzy` (bool, default: true): Enable fuzzy matching for title search
+- `threshold` (int, default: 80): Minimum similarity score for fuzzy matching (0-100)
+
+**Genres endpoint (`/api/v1/genres`)**:
+- `limit` (int, default: 100): Maximum number of genres to return (1-1000)
+
+**Book by ID endpoint (`/api/v1/books/by-id`)**:
+- `book_id` (int): The unique identifier of the book
+
+### Example Requests
+
+**Get all books:**
+```bash
+curl -X POST "http://localhost:8000/api/v1/books" \
+  -H "Content-Type: application/json" \
+  -d "{}"
+```
+
+**Filter books by genre:**
+```bash
+curl -X POST "http://localhost:8000/api/v1/books" \
+  -H "Content-Type: application/json" \
+  -d '{"genre": "Fantasy", "limit": 5}'
+```
+
+**Search books by title:**
+```bash
+curl -X POST "http://localhost:8000/api/v1/books" \
+  -H "Content-Type: application/json" \
+  -d '{"title": "Harry Potter", "fuzzy": true, "threshold": 80}'
+```
+
+**Get a specific book:**
+```bash
+curl -X POST "http://localhost:8000/api/v1/books/by-id" \
+  -H "Content-Type: application/json" \
+  -d '{"book_id": 1}'
+```
+
+**Get available genres:**
+```bash
+curl -X POST "http://localhost:8000/api/v1/genres" \
+  -H "Content-Type: application/json" \
+  -d '{"limit": 50}'
+```
 
 ## 🛠️ Quick Start
 
@@ -71,10 +130,11 @@ Pre-commit hooks will automatically run Ruff on your code when you commit, ensur
     - Get all genres
 
 ### 🌐 API Design
-- Follows REST principles
-- Uses FastAPI
+- Uses POST endpoints with JSON request bodies
+- Uses FastAPI with Pydantic models for request/response validation
 - Returns meaningful error codes
 - Returns meaningful error messages
+- Follows consistent response structure
 
 ### ⚙️ Application
 - Runs on uvicorn

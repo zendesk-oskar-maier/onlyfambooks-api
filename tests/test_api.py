@@ -66,7 +66,7 @@ def client(test_csv_file, monkeypatch):
 
 def test_root_endpoint(client):
     """Test the root endpoint"""
-    response = client.get("/")
+    response = client.post("/")
     assert response.status_code == 200
     data = response.json()
     assert "message" in data
@@ -75,7 +75,7 @@ def test_root_endpoint(client):
 
 def test_health_check(client):
     """Test the health check endpoint"""
-    response = client.get("/health")
+    response = client.post("/health")
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
@@ -85,7 +85,7 @@ def test_health_check(client):
 
 def test_get_all_books(client):
     """Test getting all books"""
-    response = client.get("/api/v1/books")
+    response = client.post("/api/v1/books", json={})
     assert response.status_code == 200
     data = response.json()
     assert len(data["books"]) == 3
@@ -95,7 +95,7 @@ def test_get_all_books(client):
 
 def test_get_book_by_id(client):
     """Test getting a specific book by ID"""
-    response = client.get("/api/v1/books/1")
+    response = client.post("/api/v1/books/by-id", json={"book_id": 1})
     assert response.status_code == 200
     data = response.json()
     assert data["id"] == 1
@@ -105,7 +105,7 @@ def test_get_book_by_id(client):
 
 def test_get_book_by_id_not_found(client):
     """Test getting a non-existent book"""
-    response = client.get("/api/v1/books/999")
+    response = client.post("/api/v1/books/by-id", json={"book_id": 999})
     assert response.status_code == 404
     data = response.json()
     assert "not found" in data["detail"].lower()
@@ -113,7 +113,7 @@ def test_get_book_by_id_not_found(client):
 
 def test_get_books_by_genre(client):
     """Test filtering books by genre"""
-    response = client.get("/api/v1/books?genre=Fantasy")
+    response = client.post("/api/v1/books", json={"genre": "Fantasy"})
     assert response.status_code == 200
     data = response.json()
     assert len(data["books"]) == 2
@@ -127,7 +127,7 @@ def test_get_books_by_genre(client):
 
 def test_get_books_by_title(client):
     """Test searching books by title"""
-    response = client.get("/api/v1/books?title=Harry Potter")
+    response = client.post("/api/v1/books", json={"title": "Harry Potter"})
     assert response.status_code == 200
     data = response.json()
     assert len(data["books"]) == 1
@@ -136,7 +136,7 @@ def test_get_books_by_title(client):
 
 def test_get_books_with_limit(client):
     """Test limiting the number of books returned"""
-    response = client.get("/api/v1/books?limit=2")
+    response = client.post("/api/v1/books", json={"limit": 2})
     assert response.status_code == 200
     data = response.json()
     assert len(data["books"]) == 2
@@ -146,7 +146,7 @@ def test_get_books_with_limit(client):
 
 def test_get_genres(client):
     """Test getting all genres"""
-    response = client.get("/api/v1/genres")
+    response = client.post("/api/v1/genres", json={})
     assert response.status_code == 200
     data = response.json()
     assert len(data["genres"]) == 7
@@ -156,7 +156,7 @@ def test_get_genres(client):
 
 def test_get_stats(client):
     """Test getting catalogue statistics"""
-    response = client.get("/api/v1/stats")
+    response = client.post("/api/v1/stats", json={})
     assert response.status_code == 200
     data = response.json()
     assert data["total_books"] == 3
@@ -165,7 +165,7 @@ def test_get_stats(client):
 
 def test_invalid_book_id(client):
     """Test invalid book ID returns 400"""
-    response = client.get("/api/v1/books/0")
+    response = client.post("/api/v1/books/by-id", json={"book_id": 0})
     assert response.status_code == 400
     data = response.json()
     assert "greater than 0" in data["detail"]
@@ -173,13 +173,14 @@ def test_invalid_book_id(client):
 
 def test_invalid_limit(client):
     """Test invalid limit parameter"""
-    response = client.get("/api/v1/books?limit=0")
-    assert response.status_code == 422  # Validation error from Pydantic
+    response = client.post("/api/v1/books", json={"limit": 0})
+    # Changed from 422 to 400 since we validate in the function
+    assert response.status_code == 400
 
 
 def test_invalid_genre(client):
     """Test invalid genre returns 400 error"""
-    response = client.get("/api/v1/books?genre=InvalidGenre")
+    response = client.post("/api/v1/books", json={"genre": "InvalidGenre"})
     assert response.status_code == 400
     data = response.json()
     assert "Unknown genre" in data["detail"]
@@ -191,19 +192,19 @@ def test_invalid_genre(client):
 def test_case_insensitive_genre(client):
     """Test genre validation is case-insensitive"""
     # Test lowercase
-    response = client.get("/api/v1/books?genre=fantasy")
+    response = client.post("/api/v1/books", json={"genre": "fantasy"})
     assert response.status_code == 200
     data = response.json()
     assert len(data["books"]) == 2
 
     # Test uppercase
-    response = client.get("/api/v1/books?genre=FANTASY")
+    response = client.post("/api/v1/books", json={"genre": "FANTASY"})
     assert response.status_code == 200
     data = response.json()
     assert len(data["books"]) == 2
 
     # Test mixed case
-    response = client.get("/api/v1/books?genre=FaNtAsY")
+    response = client.post("/api/v1/books", json={"genre": "FaNtAsY"})
     assert response.status_code == 200
     data = response.json()
     assert len(data["books"]) == 2
@@ -212,14 +213,16 @@ def test_case_insensitive_genre(client):
 def test_genre_validation_with_fuzzy_search(client):
     """Test that genre validation works with title fuzzy search"""
     # Valid genre with title search
-    response = client.get("/api/v1/books?genre=Fantasy&title=Harry")
+    response = client.post("/api/v1/books", json={"genre": "Fantasy", "title": "Harry"})
     assert response.status_code == 200
     data = response.json()
     assert len(data["books"]) == 1
     assert data["books"][0]["title"] == "Harry Potter and the Philosopher's Stone"
 
     # Invalid genre with title search should still fail
-    response = client.get("/api/v1/books?genre=InvalidGenre&title=Harry")
+    response = client.post(
+        "/api/v1/books", json={"genre": "InvalidGenre", "title": "Harry"}
+    )
     assert response.status_code == 400
     data = response.json()
     assert "Unknown genre" in data["detail"]
@@ -227,7 +230,7 @@ def test_genre_validation_with_fuzzy_search(client):
 
 def test_genre_validation_error_message_format(client):
     """Test that genre validation error message contains all available genres"""
-    response = client.get("/api/v1/books?genre=NonExistentGenre")
+    response = client.post("/api/v1/books", json={"genre": "NonExistentGenre"})
     assert response.status_code == 400
     data = response.json()
 
