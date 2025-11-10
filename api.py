@@ -3,8 +3,10 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import Annotated
 
+import yaml
 from fastapi import FastAPI, HTTPException, Query
-from fastapi.responses import JSONResponse
+from fastapi.responses import HTMLResponse, JSONResponse
+from jinja2 import Environment, FileSystemLoader
 from pydantic import BaseModel
 
 from catalogue import Book, Catalogue
@@ -15,6 +17,9 @@ logger = logging.getLogger(__name__)
 
 # Global catalogue instance
 catalogue: Catalogue | None = None
+
+# Initialize Jinja2 environment
+jinja_env = Environment(loader=FileSystemLoader("data"))
 
 
 @asynccontextmanager
@@ -174,7 +179,11 @@ async def root():
         "message": "OnlyFam Books API",
         "version": "1.0.0",
         "docs": "/docs",
-        "endpoints": {"books": "/api/v1/books", "genres": "/api/v1/genres"},
+        "endpoints": {
+            "books": "/api/v1/books",
+            "genres": "/api/v1/genres",
+            "faq": "/faq",
+        },
     }
 
 
@@ -396,6 +405,48 @@ async def post_genres(request: GenresRequest | None = None):
             detail="Failed to retrieve genres",
             headers={"error_code": "RETRIEVAL_ERROR"},
         ) from e
+
+
+@app.get("/faq", response_class=HTMLResponse, tags=["FAQ"])
+async def get_faq():
+    """
+    Get frequently asked questions page.
+
+    Returns an HTML page with questions and answers about books.
+    """
+    try:
+        faq_path = Path("data/faq.yaml")
+        if not faq_path.exists():
+            raise HTTPException(
+                status_code=404,
+                detail="FAQ data file not found",
+                headers={"error_code": "FAQ_NOT_FOUND"},
+            )
+
+        # Load FAQ data from YAML file
+        with open(faq_path, "r", encoding="utf-8") as file:
+            faq_data = yaml.safe_load(file)
+
+        # Generate HTML content
+        html_content = generate_faq_html(faq_data)
+
+        return HTMLResponse(content=html_content, status_code=200)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in get_faq: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to load FAQ",
+            headers={"error_code": "FAQ_ERROR"},
+        ) from e
+
+
+def generate_faq_html(faq_data: list[dict]) -> str:
+    """Generate HTML content for the FAQ page using Jinja2 template"""
+    template = jinja_env.get_template("faq.html.jinja")
+    return template.render(faq_data=faq_data)
 
 
 # Additional utility endpoints
