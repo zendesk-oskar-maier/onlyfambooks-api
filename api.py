@@ -1,8 +1,9 @@
 import logging
 from contextlib import asynccontextmanager
 from pathlib import Path
+from typing import Annotated
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Query
 from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
@@ -48,29 +49,6 @@ app = FastAPI(
     redoc_url="/redoc",
     lifespan=lifespan,
 )
-
-
-# Request models
-class GetBooksRequest(BaseModel):
-    """Request model for getting books"""
-
-    limit: int = 10
-    genre: str | None = None
-    title: str | None = None
-    fuzzy: bool = True
-    threshold: int = 80
-
-
-class GetBookByIdRequest(BaseModel):
-    """Request model for getting a book by ID"""
-
-    book_id: int
-
-
-class GetGenresRequest(BaseModel):
-    """Request model for getting genres"""
-
-    limit: int = 100
 
 
 # Response models
@@ -183,7 +161,7 @@ def validate_genre(genre: str, catalogue: Catalogue) -> str:
 # API Routes
 
 
-@app.post("/", tags=["Root"])
+@app.get("/", tags=["Root"])
 async def root():
     """Root endpoint with API information"""
     return {
@@ -194,7 +172,7 @@ async def root():
     }
 
 
-@app.post("/health", tags=["Health"])
+@app.get("/health", tags=["Health"])
 async def health_check():
     """Health check endpoint"""
     global catalogue
@@ -213,8 +191,22 @@ async def health_check():
     }
 
 
-@app.post("/api/v1/books", response_model=BooksListResponse, tags=["Books"])
-async def get_books(request: GetBooksRequest):
+@app.get("/api/v1/books", response_model=BooksListResponse, tags=["Books"])
+async def get_books(
+    limit: Annotated[
+        int, Query(description="Maximum number of books to return", ge=1, le=1000)
+    ] = 10,
+    genre: Annotated[str | None, Query(description="Filter books by genre")] = None,
+    title: Annotated[
+        str | None, Query(description="Search books by title (fuzzy matching)")
+    ] = None,
+    fuzzy: Annotated[
+        bool, Query(description="Use fuzzy matching for title search")
+    ] = True,
+    threshold: Annotated[
+        int, Query(description="Fuzzy matching threshold (0-100)", ge=0, le=100)
+    ] = 80,
+):
     """
     Get books with optional filtering by genre and/or title.
 
@@ -233,27 +225,22 @@ async def get_books(request: GetBooksRequest):
         )
 
     try:
-        limit = validate_limit(request.limit)
+        limit = validate_limit(limit)
 
         # Validate genre if provided
-        if request.genre:
-            genre = validate_genre(request.genre, catalogue)
-        else:
-            genre = request.genre
+        if genre:
+            genre = validate_genre(genre, catalogue)
 
         # Apply filters based on query parameters
-        if request.title and genre:
+        if title and genre:
             # Both title and genre filters
             books = catalogue.get_books_by_title_and_genre(
-                title=request.title,
-                genre=genre,
-                fuzzy_title=request.fuzzy,
-                title_threshold=request.threshold,
+                title=title, genre=genre, fuzzy_title=fuzzy, title_threshold=threshold
             )
-        elif request.title:
+        elif title:
             # Title filter only
             books = catalogue.get_books_by_title(
-                request.title, fuzzy=request.fuzzy, threshold=request.threshold
+                title, fuzzy=fuzzy, threshold=threshold
             )
         elif genre:
             # Genre filter only
@@ -282,8 +269,8 @@ async def get_books(request: GetBooksRequest):
         ) from e
 
 
-@app.post("/api/v1/books/by-id", response_model=BookResponse, tags=["Books"])
-async def get_book_by_id(request: GetBookByIdRequest):
+@app.get("/api/v1/books/{book_id}", response_model=BookResponse, tags=["Books"])
+async def get_book_by_id(book_id: int):
     """
     Get a specific book by its ID.
 
@@ -297,7 +284,7 @@ async def get_book_by_id(request: GetBookByIdRequest):
             headers={"error_code": "SERVICE_UNAVAILABLE"},
         )
 
-    if request.book_id < 1:
+    if book_id < 1:
         raise HTTPException(
             status_code=400,
             detail="Book ID must be greater than 0",
@@ -305,11 +292,11 @@ async def get_book_by_id(request: GetBookByIdRequest):
         )
 
     try:
-        book = catalogue.get_book_by_id(request.book_id)
+        book = catalogue.get_book_by_id(book_id)
         if book is None:
             raise HTTPException(
                 status_code=404,
-                detail=f"Book with ID {request.book_id} not found",
+                detail=f"Book with ID {book_id} not found",
                 headers={"error_code": "BOOK_NOT_FOUND"},
             )
 
@@ -326,8 +313,12 @@ async def get_book_by_id(request: GetBookByIdRequest):
         ) from e
 
 
-@app.post("/api/v1/genres", response_model=GenresResponse, tags=["Genres"])
-async def get_genres(request: GetGenresRequest):
+@app.get("/api/v1/genres", response_model=GenresResponse, tags=["Genres"])
+async def get_genres(
+    limit: Annotated[
+        int, Query(description="Maximum number of genres to return", ge=1, le=1000)
+    ] = 100,
+):
     """
     Get all available genres.
 
@@ -342,7 +333,7 @@ async def get_genres(request: GetGenresRequest):
         )
 
     try:
-        limit = validate_limit(request.limit)
+        limit = validate_limit(limit)
 
         all_genres = catalogue.get_all_genres()
         total_genres = len(all_genres)
@@ -362,7 +353,7 @@ async def get_genres(request: GetGenresRequest):
 # Additional utility endpoints
 
 
-@app.post("/api/v1/stats", tags=["Stats"])
+@app.get("/api/v1/stats", tags=["Stats"])
 async def get_catalogue_stats():
     """Get catalogue statistics"""
     global catalogue
