@@ -86,6 +86,12 @@ class ErrorResponse(BaseModel):
     error_code: str
 
 
+class GenresRequest(BaseModel):
+    """Request model for POST genres endpoint"""
+
+    limit: int | None = None
+
+
 # Exception handlers
 @app.exception_handler(HTTPException)
 async def http_exception_handler(request, exc):
@@ -343,6 +349,48 @@ async def get_genres(
 
     except Exception as e:
         logger.error(f"Error in get_genres: {e}")
+        raise HTTPException(
+            status_code=500,
+            detail="Failed to retrieve genres",
+            headers={"error_code": "RETRIEVAL_ERROR"},
+        ) from e
+
+
+@app.post("/api/v1/genres", response_model=GenresResponse, tags=["Genres"])
+async def post_genres(request: GenresRequest | None = None):
+    """
+    Get all available genres via POST request.
+
+    - **limit**: Maximum number of genres to return (1-1000),
+      defaults to 100 if not provided
+    """
+    global catalogue
+    if catalogue is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Service unavailable - catalogue not initialized",
+            headers={"error_code": "SERVICE_UNAVAILABLE"},
+        )
+
+    try:
+        # Initialize request if None (empty body)
+        if request is None:
+            request = GenresRequest()
+
+        # Use provided limit or default to 100
+        limit = request.limit if request.limit is not None else 100
+        limit = validate_limit(limit)
+
+        all_genres = catalogue.get_all_genres()
+        total_genres = len(all_genres)
+        limited_genres = all_genres[:limit]
+
+        return GenresResponse(genres=limited_genres, total=total_genres, limit=limit)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Error in post_genres: {e}")
         raise HTTPException(
             status_code=500,
             detail="Failed to retrieve genres",

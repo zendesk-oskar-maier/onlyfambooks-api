@@ -154,6 +154,33 @@ def test_get_genres(client):
     assert "Classics" in data["genres"]
 
 
+def test_post_genres_empty_body(client):
+    """Test POST genres with empty body"""
+    response = client.post("/api/v1/genres")
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["genres"]) == 7
+    assert data["limit"] == 100
+
+
+def test_post_genres_with_limit(client):
+    """Test POST genres with limit in body"""
+    response = client.post("/api/v1/genres", json={"limit": 3})
+    assert response.status_code == 200
+    data = response.json()
+    assert len(data["genres"]) == 3
+    assert data["total"] == 7
+    assert data["limit"] == 3
+
+
+def test_post_genres_invalid_limit(client):
+    """Test POST genres with invalid limit"""
+    response = client.post("/api/v1/genres", json={"limit": 0})
+    assert response.status_code == 400
+    data = response.json()
+    assert "greater than 0" in data["detail"]
+
+
 def test_get_stats(client):
     """Test getting catalogue statistics"""
     response = client.get("/api/v1/stats")
